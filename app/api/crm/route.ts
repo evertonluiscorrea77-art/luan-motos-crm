@@ -2,13 +2,14 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { adMetrics, goals, leads, motorcycles } from "@/db/schema";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
-import { demoAds, demoGoal, demoLeads, demoMotorcycles } from "@/lib/demo-data";
+import { demoAds, demoGoal, demoLeads } from "@/lib/demo-data";
+import { catalogMotorcycles } from "@/lib/catalog-data";
 
 async function authorized(){return Boolean(await getChatGPTUser())}
 const slugify=(v:string)=>v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 export async function GET(){
   if(!(await authorized()))return Response.json({error:"Não autorizado"},{status:401});
-  try{const db=getDb();const [motos,contacts,target,ads]=await Promise.all([db.select().from(motorcycles).orderBy(desc(motorcycles.createdAt)),db.select().from(leads).orderBy(desc(leads.updatedAt)),db.select().from(goals).orderBy(desc(goals.month)).limit(1),db.select().from(adMetrics).orderBy(desc(adMetrics.month))]);const empty=!motos.length&&!contacts.length;return Response.json({motorcycles:motos.length?motos:demoMotorcycles,leads:contacts.length?contacts:demoLeads,goal:target[0]??demoGoal,ads:ads.length?ads:demoAds,demo:empty})}catch{return Response.json({motorcycles:demoMotorcycles,leads:demoLeads,goal:demoGoal,ads:demoAds,demo:true})}
+  try{const db=getDb();const [motos,contacts,target,ads]=await Promise.all([db.select().from(motorcycles).orderBy(desc(motorcycles.createdAt)),db.select().from(leads).orderBy(desc(leads.updatedAt)),db.select().from(goals).orderBy(desc(goals.month)).limit(1),db.select().from(adMetrics).orderBy(desc(adMetrics.month))]);const empty=!motos.length&&!contacts.length;return Response.json({motorcycles:motos.length?motos:catalogMotorcycles,leads:contacts.length?contacts:demoLeads,goal:target[0]??demoGoal,ads:ads.length?ads:demoAds,demo:empty})}catch{return Response.json({motorcycles:catalogMotorcycles,leads:demoLeads,goal:demoGoal,ads:demoAds,demo:true})}
 }
 export async function POST(request:Request){
   if(!(await authorized()))return Response.json({error:"Não autorizado"},{status:401});

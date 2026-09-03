@@ -4,30 +4,36 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowRight, Camera, ListFilter, MapPin, MessageCircle, RotateCcw, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import type { Motorcycle } from "@/lib/demo-data";
-import { demoMotorcycles, parseImages } from "@/lib/demo-data";
+import { parseImages } from "@/lib/demo-data";
+import { catalogMotorcycles } from "@/lib/catalog-data";
+import CatalogImage from "@/components/catalog-image";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const money=(value:number|null)=>value?new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0}).format(value):"Consulte";
 const whatsapp=(motorcycle?:Motorcycle)=>`https://wa.me/558399036083?text=${encodeURIComponent(motorcycle?`Olá, Luan! Vi a ${motorcycle.brand} ${motorcycle.model} ${motorcycle.year} no site e quero saber mais.`:"Olá, Luan! Vim pelo site e quero encontrar minha próxima moto.")}`;
+const modelFamily=(moto:Motorcycle)=>{
+  const value=`${moto.brand} ${moto.model}`.toUpperCase().replace(/[-/,]/g," ");
+  const families=["XRE 300","XRE 190","TITAN 160","TITAN 150","TITAN 125","FAN 160","FAN 150","FAN 125","BROS 160","BROS 150","BIZ 125","BIZ 110","BIZ 100","POP 110","POP 100","CB 300","CB 250","CBX 250","TWISTER 250","XT 660","XTZ 250","LANDER 250","FALCON 400","START 160","CRF 250","CRF 230","HORNET 600","CB 500","PCX 150","FAZER 250","FAZER 150","FACTOR 150","FACTOR 125","TORNADO 250","SAHARA 300","NC 750","YBR 150","YBR 125"];
+  return families.find(item=>value.includes(item))||moto.model.replace(/\b(?:19|20)\d{2}\b.*$/," ").trim();
+};
 
 export default function PublicShowroom(){
-  const [motos,setMotos]=useState(demoMotorcycles.filter(m=>m.published&&m.status==="disponivel"));
+  const [motos,setMotos]=useState(catalogMotorcycles.filter(m=>m.published&&m.status==="disponivel"));
   const [selected,setSelected]=useState<Motorcycle|null>(null);
   const [model,setModel]=useState(""),[year,setYear]=useState(""),[maxPrice,setMaxPrice]=useState(""),[visible,setVisible]=useState(12);
   const [interest,setInterest]=useState({name:"",phone:""}),[sending,setSending]=useState(false);
   useEffect(()=>{fetch("/api/inventory").then(r=>r.json()).then(d=>d.motorcycles&&setMotos(d.motorcycles)).catch(()=>{})},[]);
-  const models=useMemo(()=>Array.from(new Set(motos.map(m=>`${m.brand} ${m.model}`))).sort((a,b)=>a.localeCompare(b,"pt-BR")),[motos]);
-  const years=useMemo(()=>Array.from(new Set(motos.map(m=>m.year))).sort((a,b)=>b-a),[motos]);
+  const models=useMemo(()=>Array.from(new Set(motos.map(modelFamily))).sort((a,b)=>a.localeCompare(b,"pt-BR")),[motos]);
+  const years=useMemo(()=>Array.from(new Set(motos.map(m=>m.year).filter(Boolean))).sort((a,b)=>b-a),[motos]);
   const priceLimits=useMemo(()=>{const highest=Math.max(3000,...motos.map(m=>m.askingPrice||0));return Array.from({length:Math.max(1,Math.ceil(highest/1000)-2)},(_,i)=>(i+3)*1000)},[motos]);
   const filtered=useMemo(()=>motos.filter(m=>{
-    const name=`${m.brand} ${m.model}`;
-    return (!model||name===model)&&(!year||m.year===Number(year))&&(!maxPrice||(m.askingPrice!==null&&m.askingPrice<=Number(maxPrice)));
+    return (!model||modelFamily(m)===model)&&(!year||m.year===Number(year))&&(!maxPrice||(m.askingPrice!==null&&m.askingPrice<=Number(maxPrice)));
   }),[motos,model,year,maxPrice]);
   const activeFilters=[model,year,maxPrice].filter(Boolean).length;
   const clearFilters=()=>{setModel("");setYear("");setMaxPrice("");setVisible(12)};
   return <main className="showroom-shell">
     <section className="showroom-hero" id="inicio">
-      <Image fill priority sizes="100vw" className="showroom-hero-bg" src="/images/luan-motos-cover.png" alt="Identidade visual Luan Motos" />
+      <Image fill priority sizes="100vw" className="showroom-hero-bg" src="/images/luan-motos-cover.webp" alt="Identidade visual Luan Motos" />
       <div className="showroom-shade" />
       <header className="public-header">
         <a className="wordmark" href="#inicio"><span>LM</span> LUAN MOTOS</a>
@@ -67,9 +73,9 @@ export default function PublicShowroom(){
       </div>
       <div className="motorcycle-grid">
         {filtered.slice(0,visible).map((moto,index)=>{const image=parseImages(moto.images)[0]||"/images/showroom.jpg";return <article className={`moto-card ${index===0?"moto-card-wide":""}`} key={moto.id} onClick={()=>setSelected(moto)} tabIndex={0} onKeyDown={e=>e.key==="Enter"&&setSelected(moto)}>
-          <Image fill sizes={index===0?"100vw":"(max-width: 820px) 100vw, 50vw"} src={image} alt={`${moto.brand} ${moto.model}`} />
+          <CatalogImage fill sizes={index===0?"100vw":"(max-width: 820px) 100vw, 50vw"} src={image} alt={`${moto.brand} ${moto.model}`} />
           <div className="moto-card-shade"/><div className="moto-status">Disponível</div>
-          <div className="moto-card-copy"><p>{moto.brand}</p><h3>{moto.model}</h3><div className="moto-meta"><span>{moto.year}</span><span>{moto.mileage.toLocaleString("pt-BR")} km</span><span>{moto.engine}</span></div><div className="moto-price"><strong>{money(moto.askingPrice)}</strong><span>Conhecer <ArrowRight size={16}/></span></div></div>
+          <div className="moto-card-copy"><p>{moto.brand}</p><h3>{moto.model}</h3><div className="moto-meta">{moto.year>0&&<span>{moto.year}</span>}{moto.mileage>0&&<span>{moto.mileage.toLocaleString("pt-BR")} km</span>}{moto.engine&&<span>{moto.engine}</span>}</div><div className="moto-price"><strong>{money(moto.askingPrice)}</strong><span>Conhecer <ArrowRight size={16}/></span></div></div>
         </article>})}
       </div>
       {filtered.length===0&&<div className="catalog-empty"><p>Nenhuma moto com esses filtros.</p><button type="button" onClick={clearFilters}>Ver todo o estoque</button></div>}
@@ -85,6 +91,6 @@ export default function PublicShowroom(){
 
     <footer className="public-footer"><div className="wordmark"><span>LM</span> LUAN MOTOS</div><p>Você escolhe a próxima. A gente resolve o caminho.</p><div><a href="https://instagram.com/luanmotos.br" target="_blank" rel="noreferrer"><Camera/> @luanmotos.br</a><a href={whatsapp()} target="_blank" rel="noreferrer"><MessageCircle/> (83) 9903-6083</a></div><a className="admin-link" href="/painel">Área da loja</a></footer>
 
-    {selected&&<div className="detail-overlay" role="dialog" aria-modal="true" aria-label={`Detalhes da ${selected.model}`} onClick={()=>setSelected(null)}><article className="detail-panel" onClick={e=>e.stopPropagation()}><button className="detail-close" onClick={()=>setSelected(null)}>Fechar</button><div className="detail-image"><Image fill sizes="(max-width: 720px) 100vw, 720px" src={parseImages(selected.images)[0]||"/images/showroom.jpg"} alt={`${selected.brand} ${selected.model}`}/></div><div className="detail-body"><p className="eyebrow dark">{selected.brand}</p><h2>{selected.model}</h2><p>{selected.description}</p><div className="detail-specs"><span><b>{selected.year}</b>Ano</span><span><b>{selected.mileage.toLocaleString("pt-BR")} km</b>Rodagem</span><span><b>{selected.engine}</b>Motor</span><span><b>{selected.color}</b>Cor</span></div><div className="detail-bottom"><strong>{money(selected.askingPrice)}</strong><a href={`/motos/${selected.slug}`}>Ver página completa <ArrowRight/></a></div><form className="interest-form" onSubmit={async e=>{e.preventDefault();setSending(true);await fetch("/api/interests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...interest,motorcycleId:selected.id})}).catch(()=>{});window.open(whatsapp(selected),"_blank","noopener,noreferrer");setSending(false)}}><p>Receba as condições no WhatsApp</p><input required placeholder="Seu nome" value={interest.name} onChange={e=>setInterest({...interest,name:e.target.value})}/><input required inputMode="tel" placeholder="Seu WhatsApp" value={interest.phone} onChange={e=>setInterest({...interest,phone:e.target.value})}/><button disabled={sending}><MessageCircle/>{sending?"Abrindo...":"Tenho interesse"}</button></form></div></article></div>}
+    {selected&&<div className="detail-overlay" role="dialog" aria-modal="true" aria-label={`Detalhes da ${selected.model}`} onClick={()=>setSelected(null)}><article className="detail-panel" onClick={e=>e.stopPropagation()}><button className="detail-close" onClick={()=>setSelected(null)}>Fechar</button><div className="detail-image"><CatalogImage fill sizes="(max-width: 720px) 100vw, 720px" src={parseImages(selected.images)[0]||"/images/showroom.jpg"} alt={`${selected.brand} ${selected.model}`}/></div><div className="detail-body"><p className="eyebrow dark">{selected.brand}</p><h2>{selected.model}</h2><p>{selected.description}</p><div className="detail-specs"><span><b>{selected.year||"Não informado"}</b>Ano</span>{selected.mileage>0&&<span><b>{selected.mileage.toLocaleString("pt-BR")} km</b>Rodagem</span>}{selected.engine&&<span><b>{selected.engine}</b>Motor</span>}{selected.color&&<span><b>{selected.color}</b>Cor</span>}</div><div className="detail-bottom"><strong>{money(selected.askingPrice)}</strong><a href={`/motos/${selected.slug}`}>Ver página completa <ArrowRight/></a></div><form className="interest-form" onSubmit={async e=>{e.preventDefault();setSending(true);await fetch("/api/interests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...interest,motorcycleId:selected.id})}).catch(()=>{});window.open(whatsapp(selected),"_blank","noopener,noreferrer");setSending(false)}}><p>Receba as condições no WhatsApp</p><input required placeholder="Seu nome" value={interest.name} onChange={e=>setInterest({...interest,name:e.target.value})}/><input required inputMode="tel" placeholder="Seu WhatsApp" value={interest.phone} onChange={e=>setInterest({...interest,phone:e.target.value})}/><button disabled={sending}><MessageCircle/>{sending?"Abrindo...":"Tenho interesse"}</button></form></div></article></div>}
   </main>
 }
