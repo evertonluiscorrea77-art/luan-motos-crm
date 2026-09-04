@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Luan Motos - Exportador de Catálogo WhatsApp
 // @namespace    luan-motos-crm
-// @version      0.1.0
+// @version      0.2.0
 // @description  Exporta o catálogo do WhatsApp Web com fotos e JSON para o CRM Luan Motos.
 // @match        https://web.whatsapp.com/*
 // @require      https://github.com/wppconnect-team/wa-js/releases/download/nightly/wppconnect-wa.js
@@ -39,6 +39,48 @@
     if (!chat) return '';
     const id = chat.id;
     return id?._serialized || id?.toString?.() || String(id || '');
+  }
+
+  async function catalogChatCandidates() {
+    const activeId = activeChatId();
+    if (!activeId) throw new Error('Não consegui identificar a conversa aberta.');
+
+    const candidates = [];
+    if (activeId.endsWith('@lid') && WPP.contact?.getPnLidEntry) {
+      setStatus('Convertendo o contato do WhatsApp…', 2);
+      try {
+        const mapping = await WPP.contact.getPnLidEntry(activeId);
+        const phoneId = mapping?.phoneNumber?._serialized;
+        if (phoneId) candidates.push(phoneId);
+      } catch (error) {
+        console.warn('[LM Export] Não foi possível converter @lid para @c.us', error);
+      }
+    }
+
+    candidates.push(activeId);
+    return unique(candidates.filter((id) => /@(c\.us|lid|s\.us)$/.test(id)));
+  }
+
+  async function loadCatalog() {
+    const candidates = await catalogChatCandidates();
+    if (!candidates.length) throw new Error('A conversa aberta não parece ser um contato válido do WhatsApp.');
+
+    let lastError;
+    for (const chatId of candidates) {
+      try {
+        setStatus(`Lendo catálogo de ${chatId.split('@')[0]}…`, 4);
+        const products = await WPP.catalog.getProducts(chatId, MAX_PRODUCTS);
+        if (Array.isArray(products) && products.length) {
+          return { chatId, products };
+        }
+      } catch (error) {
+        lastError = error;
+        console.warn('[LM Export] Falha ao consultar catálogo com', chatId, error);
+      }
+    }
+
+    if (lastError) throw lastError;
+    throw new Error('Nenhum item de catálogo foi encontrado nessa conversa.');
   }
 
   function parsePrice(raw) {
@@ -168,7 +210,11 @@
       <div style="font-size:11px;color:#667781;margin-top:9px;line-height:1.35">Gera 1 ZIP com fotos + catalogo.json. Nenhuma mensagem é enviada.</div>
     `;
     document.body.appendChild(box);
-    document.getElementById('lm-export').addEventListener('click', exportCatalog);
+    const button = document.getElementById('lm-export');
+    button.addEventListener('click', () => {
+      setStatus('Clique recebido. Validando WhatsApp…', 1);
+      setTimeout(() => exportCatalog(), 50);
+    });
   }
 
   function setStatus(text, progress = null) {
@@ -186,23 +232,33 @@
     const button = document.getElementById('lm-export');
     if (button.disabled) return;
     button.disabled = true;
+    button.style.opacity = '0.72';
     button.textContent = 'Exportando…';
+
     try {
-      const authenticated = await WPP?.conn?.isAuthenticated?.();
-      if (!authenticated) throw new Error('WhatsApp Web ainda não está autenticado.');
-      const chatId = activeChatId();
-      if (!chatId || !/@(?:c|s)\.us$/.test(chatId)) throw new Error('Abra primeiro a conversa da loja que possui o catálogo.');
-      setStatus('Lendo catálogo…', 2);
-      const products = await WPP.catalog.getProducts(chatId, MAX_PRODUCTS);
-      if (!Array.isArray(products) || !products.length) throw new Error('Nenhum item de catálogo encontrado nessa conversa.');
+      if (!window.WPP?.catalog?.getProducts) {
+        throw new Error('A biblioteca do WhatsApp ainda não terminou de carregar. Aguarde 5 segundos e tente de novo.');
+      }
+      const authenticated = WPP?.conn?.isAuthenticated?.();
+      if (authenticated === false) throw new Error('WhatsApp Web ainda não está autenticado.');
+
+      setStatus('Identificando a conversa aberta…', 2);
+      const { chatId, products } = await loadCatalog();
+      setStatus(`Catálogo encontrado: ${products.length} itens.`, 5);
+
+      if (typeof JSZip === 'undefined') {
+        throw new Error('O módulo ZIP não carregou. Recarregue o WhatsApp e tente novamente.');
+      }
       const zip = new JSZip();
       const exported = [];
       let imageCount = 0;
       let failedImages = 0;
+
       for (let i = 0; i < products.length; i++) {
         const base = products[i];
         const productId = String(base?.id?.toString?.() || base?.id || base?.productId || '');
         if (!productId) continue;
+
         setStatus(`Moto ${i + 1}/${products.length}: carregando dados…`, 5 + (i / products.length) * 86);
         let detail;
         try {
@@ -211,10 +267,12 @@
           console.warn('[LM Export] Falha ao detalhar produto', productId, error);
           detail = { ...base, id: productId };
         }
+
         const derived = deriveMotorcycle(detail);
         const folderName = `${String(i + 1).padStart(3, '0')}-${slugify(detail.name || derived.model)}-${productId}`;
         const urls = imageUrls(detail);
         const savedImages = [];
+
         for (let j = 0; j < urls.length; j++) {
           setStatus(`Moto ${i + 1}/${products.length}: foto ${j + 1}/${urls.length}`, 5 + ((i + (j / Math.max(1, urls.length))) / products.length) * 86);
           try {
@@ -229,6 +287,7 @@
           }
           await sleep(60);
         }
+
         exported.push({
           whatsapp: {
             productId, chatId, retailerId: detail.retailer_id || '', name: detail.name || '',
@@ -240,6 +299,7 @@
         });
         await sleep(120);
       }
+
       const manifest = {
         format: 'luan-motos-whatsapp-catalog-v1', exportedAt: new Date().toISOString(), sourceChatId: chatId,
         totalProducts: exported.length, totalImages: imageCount, failedImages, motorcycles: exported
@@ -252,6 +312,7 @@
         'O arquivo catalogo.json contém os dados brutos do WhatsApp e os campos pré-estruturados do CRM.',
         'Itens com reviewRequired=true devem ser conferidos antes da publicação final.'
       ].join('\n'));
+
       setStatus('Montando ZIP…', 94);
       const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }, (meta) => {
         setStatus(`Montando ZIP… ${Math.round(meta.percent)}%`, 94 + meta.percent * 0.05);
@@ -264,12 +325,13 @@
       setStatus(error instanceof Error ? error.message : 'Falha ao exportar catálogo.');
     } finally {
       button.disabled = false;
+      button.style.opacity = '1';
       button.textContent = 'Exportar catálogo completo';
     }
   }
 
   function boot() {
-    const ready = () => { makeUi(); setStatus('Pronto. Abra a conversa da loja.'); };
+    const ready = () => { makeUi(); setStatus('v0.2 pronta. Abra a conversa da loja.'); };
     if (window.WPP?.isReady || window.WPP?.isFullReady) ready();
     else if (window.WPP?.loader?.onReady) WPP.loader.onReady(ready);
     else setTimeout(boot, 1500);
