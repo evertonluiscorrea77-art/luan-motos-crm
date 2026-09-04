@@ -9,7 +9,7 @@ from PIL import Image, ImageOps
 
 root = Path(__file__).resolve().parents[1]
 archive = Path('/workspace/scratch/74adea7dedf9/upload/luan-motos-catalogo-whatsapp-2026-09-04.zip')
-old = (root / 'lib/catalog-data.ts').read_text()
+old = (root / 'lib/catalog-archive.ts').read_text()
 records = []
 for line in old.splitlines():
     if line.strip().startswith('{id:'):
@@ -41,8 +41,8 @@ with zipfile.ZipFile(archive) as z:
             if digest in hashes:
                 continue
             hashes.add(digest)
-            target = dest / f'{len(image_paths)+1:02}.webp'
-            image.save(target, 'WEBP', quality=90, method=6)
+            target = dest / f'{len(image_paths)+1:02}.avif'
+            image.save(target, 'AVIF', quality=50, speed=6)
             image_paths.append('/' + target.relative_to(root/'public').as_posix())
         if not image_paths:
             raise ValueError('No large images for ' + name)
