@@ -1,5 +1,6 @@
 import type { Motorcycle } from "@/lib/demo-data";
 import { catalogMissingMotorcycles } from "@/lib/catalog-missing";
+import presentationCatalog from "@/lib/presentation-catalog.json";
 
 const acquiredAt = "2026-09-03T00:00:00.000Z";
 
@@ -736,4 +737,5 @@ const catalogBaseMotorcycles: Motorcycle[] = [
   {id:817,slug:"honda-xre-190-2016-817",brand:"Honda",model:"XRE 190 2016",version:"Honda XRE 190 2016",year:2016,mileage:0,engine:"",color:"",askingPrice:6400,purchasePrice:null,minimumPrice:null,salePrice:null,ownership:"consignada",status:"disponivel",featured:false,published:true,description:"Honda XRE 190 2016. Anúncio importado do catálogo da Luan Motos; confirme detalhes e disponibilidade diretamente com a loja.",features:"[]",images:"[\"sprite:16:40\"]",acquiredAt,soldAt:null,createdAt:acquiredAt,updatedAt:acquiredAt},
 ];
 
-export const catalogMotorcycles: Motorcycle[] = [...catalogBaseMotorcycles, ...catalogMissingMotorcycles].sort((a,b)=>a.id-b.id);
+export const archivedCatalogMotorcycles: Motorcycle[] = [...catalogBaseMotorcycles, ...catalogMissingMotorcycles].sort((a,b)=>a.id-b.id);
+export const catalogMotorcycles: Motorcycle[] = presentationCatalog as Motorcycle[];

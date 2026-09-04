@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowRight, Camera, ListFilter, MapPin, MessageCircle, RotateCcw, ShieldCheck } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import type { Motorcycle } from "@/lib/demo-data";
 import { parseImages } from "@/lib/demo-data";
 import { catalogMotorcycles } from "@/lib/catalog-data";
@@ -19,9 +20,7 @@ const modelFamily=(moto:Motorcycle)=>{
 
 export default function PublicShowroom(){
   const [motos,setMotos]=useState(catalogMotorcycles.filter(m=>m.published&&m.status==="disponivel"));
-  const [selected,setSelected]=useState<Motorcycle|null>(null);
   const [model,setModel]=useState(""),[year,setYear]=useState(""),[maxPrice,setMaxPrice]=useState(""),[visible,setVisible]=useState(12);
-  const [interest,setInterest]=useState({name:"",phone:""}),[sending,setSending]=useState(false);
   useEffect(()=>{fetch("/api/inventory").then(r=>r.json()).then(d=>d.motorcycles&&setMotos(d.motorcycles)).catch(()=>{})},[]);
   const models=useMemo(()=>Array.from(new Set(motos.map(modelFamily))).sort((a,b)=>a.localeCompare(b,"pt-BR")),[motos]);
   const years=useMemo(()=>Array.from(new Set(motos.map(m=>m.year).filter(Boolean))).sort((a,b)=>b-a),[motos]);
@@ -72,18 +71,20 @@ export default function PublicShowroom(){
         </div>
       </div>
       <div className="motorcycle-grid">
-        {filtered.slice(0,visible).map((moto,index)=>{const image=parseImages(moto.images)[0]||"/images/showroom.jpg";return <article className={`moto-card ${index===0?"moto-card-wide":""}`} key={moto.id} onClick={()=>setSelected(moto)} tabIndex={0} onKeyDown={e=>e.key==="Enter"&&setSelected(moto)}>
-          <CatalogImage fill sizes={index===0?"100vw":"(max-width: 820px) 100vw, 50vw"} src={image} alt={`${moto.brand} ${moto.model}`} />
-          <div className="moto-card-shade"/><div className="moto-status">Disponível</div>
-          <div className="moto-card-copy"><p>{moto.brand}</p><h3>{moto.model}</h3><div className="moto-meta">{moto.year>0&&<span>{moto.year}</span>}{moto.mileage>0&&<span>{moto.mileage.toLocaleString("pt-BR")} km</span>}{moto.engine&&<span>{moto.engine}</span>}</div><div className="moto-price"><strong>{money(moto.askingPrice)}</strong><span>Conhecer <ArrowRight size={16}/></span></div></div>
-        </article>})}
+        {filtered.slice(0,visible).map(moto => {
+          const images = parseImages(moto.images);
+          return <Link className="moto-card presentation-card" href={`/motos/${moto.slug}`} key={moto.id}>
+            <div className="presentation-card-photo"><CatalogImage fill sizes="(max-width: 820px) 100vw, 50vw" src={images[0]} alt={moto.model} /><span className="photo-count"><Camera size={15}/>{images.length} fotos</span></div>
+            <div className="presentation-card-copy"><p>{moto.brand} · {moto.year}</p><h3>{moto.model}</h3><div><strong>{money(moto.askingPrice)}</strong><span>Ver detalhes <ArrowRight size={17}/></span></div></div>
+          </Link>;
+        })}
       </div>
       {filtered.length===0&&<div className="catalog-empty"><p>Nenhuma moto com esses filtros.</p><button type="button" onClick={clearFilters}>Ver todo o estoque</button></div>}
       {visible<filtered.length&&<button className="catalog-more" type="button" onClick={()=>setVisible(v=>v+12)}>Mostrar mais motos <span>{Math.min(12,filtered.length-visible)}</span></button>}
     </section>
 
     <section className="trust-section" id="sobre">
-      <div className="trust-visual"><Image fill sizes="(max-width: 820px) 100vw, 55vw" src="/images/showroom.jpg" alt="Showroom de motocicletas"/><div className="trust-stamp"><ShieldCheck/><span>Escolha<br/>com confiança</span></div></div>
+      <div className="trust-visual"><Image fill sizes="(max-width: 820px) 100vw, 55vw" src={parseImages(catalogMotorcycles[0].images)[2]} alt="Detalhes da Lander 250 do catálogo Luan Motos"/><div className="trust-stamp"><ShieldCheck/><span>Escolha<br/>com confiança</span></div></div>
       <div className="trust-copy"><p className="eyebrow dark">Luan Motos</p><h2>Negócio bom começa com verdade.</h2><p>Atendimento próximo, avaliação justa e suporte em cada etapa da negociação. Você entende a moto, as condições e o próximo passo antes de decidir.</p><ul><li><span>01</span> Compra, venda e troca</li><li><span>02</span> Financiamento</li><li><span>03</span> Avaliação da sua moto</li></ul><a href={whatsapp()} target="_blank" rel="noreferrer">Conversar agora <ArrowRight size={18}/></a></div>
     </section>
 
@@ -91,6 +92,5 @@ export default function PublicShowroom(){
 
     <footer className="public-footer"><div className="wordmark"><span>LM</span> LUAN MOTOS</div><p>Você escolhe a próxima. A gente resolve o caminho.</p><div><a href="https://instagram.com/luanmotos.br" target="_blank" rel="noreferrer"><Camera/> @luanmotos.br</a><a href={whatsapp()} target="_blank" rel="noreferrer"><MessageCircle/> (83) 9903-6083</a></div><a className="admin-link" href="/painel">Área da loja</a></footer>
 
-    {selected&&<div className="detail-overlay" role="dialog" aria-modal="true" aria-label={`Detalhes da ${selected.model}`} onClick={()=>setSelected(null)}><article className="detail-panel" onClick={e=>e.stopPropagation()}><button className="detail-close" onClick={()=>setSelected(null)}>Fechar</button><div className="detail-image"><CatalogImage fill sizes="(max-width: 720px) 100vw, 720px" src={parseImages(selected.images)[0]||"/images/showroom.jpg"} alt={`${selected.brand} ${selected.model}`}/></div><div className="detail-body"><p className="eyebrow dark">{selected.brand}</p><h2>{selected.model}</h2><p>{selected.description}</p><div className="detail-specs"><span><b>{selected.year||"Não informado"}</b>Ano</span>{selected.mileage>0&&<span><b>{selected.mileage.toLocaleString("pt-BR")} km</b>Rodagem</span>}{selected.engine&&<span><b>{selected.engine}</b>Motor</span>}{selected.color&&<span><b>{selected.color}</b>Cor</span>}</div><div className="detail-bottom"><strong>{money(selected.askingPrice)}</strong><a href={`/motos/${selected.slug}`}>Ver página completa <ArrowRight/></a></div><form className="interest-form" onSubmit={async e=>{e.preventDefault();setSending(true);await fetch("/api/interests",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...interest,motorcycleId:selected.id})}).catch(()=>{});window.open(whatsapp(selected),"_blank","noopener,noreferrer");setSending(false)}}><p>Receba as condições no WhatsApp</p><input required placeholder="Seu nome" value={interest.name} onChange={e=>setInterest({...interest,name:e.target.value})}/><input required inputMode="tel" placeholder="Seu WhatsApp" value={interest.phone} onChange={e=>setInterest({...interest,phone:e.target.value})}/><button disabled={sending}><MessageCircle/>{sending?"Abrindo...":"Tenho interesse"}</button></form></div></article></div>}
   </main>
 }
